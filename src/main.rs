@@ -25,7 +25,6 @@ fn main() -> io::Result<()> {
     let args = Args::parse();
 
     let json = get_json(args.file_name)?;
-    println!("{:?}", json.chars());
     let is_valid = parse_json(&json);
 
     if is_valid {
@@ -48,7 +47,10 @@ fn parse_json(json: &String) -> bool {
 
     for char in chars {
         if !is_in_string {
-            if char == '"' {
+            if char == '\\' {
+                // Nothing to escape outside of a string
+                return false;
+            } else if char == '"' && prev_char != '\\' {
                 is_in_string = true;
             } else if char == '{' {
                 bracket_stack.push(char);
