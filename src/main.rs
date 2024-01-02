@@ -1,4 +1,5 @@
 use clap::Parser;
+use regex::Regex;
 use std::{
     fs::File,
     io::{self, BufReader, Read},
@@ -42,12 +43,19 @@ fn parse_json(json: &String) -> bool {
 
     let mut bracket_stack: Vec<char> = Vec::new();
     let mut is_in_string = false;
-    let mut prev_char: char = '{';
+    let mut is_in_value = false;
+    let mut prev_char = '{';
     let chars = json.chars();
+    let mut value = String::new();
 
     for char in chars {
         if !is_in_string {
-            if char == '\\' {
+            if prev_char == ':' {
+                // Start building out the value
+                is_in_value = true;
+            } else if char == ',' {
+                is_in_value = false;
+            } else if char == '\\' {
                 // Nothing to escape outside of a string
                 return false;
             } else if char == '"' && prev_char != '\\' {
@@ -67,15 +75,39 @@ fn parse_json(json: &String) -> bool {
                 is_in_string = false;
             }
         }
+        if is_in_value {
+            value.push(char);
+        } else if !is_in_value && !value.is_empty() {
+            if !is_value_valid(&value) {
+                return false;
+            } else {
+                value = String::new();
+            }
+        }
         prev_char = char;
     }
 
     // Make sure all brackets matched up
-    if !bracket_stack.is_empty() {
+    if !bracket_stack.is_empty() || is_in_string {
         return false;
     }
 
     return true;
+}
+
+fn is_value_valid(value: &String) -> bool {
+    let value = value.trim();
+    // let number_regex = Regex::new(r"-?\d+(\.\d+)?([eE][-+]?\d+)?").unwrap();
+    let string_regex = Regex::new(r#"^\"(?:[^\"\\]|\\.)*\"$"#).unwrap();
+    // if value != "true"
+    //     && value != "false"
+    //     && value != "null"
+    //     && !number_regex.is_match(&value)
+    //     && !string_regex.is_match(&value)
+    // {
+    //     return false;
+    // }
+    return string_regex.is_match(&value);
 }
 
 fn get_json(file_name: Option<String>) -> io::Result<String> {
