@@ -6,7 +6,6 @@ use std::{
     io::{self, BufReader, Read},
 };
 
-/// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -14,15 +13,17 @@ struct Args {
     file_name: Option<String>,
 }
 
-// Use a stack for brackets
-// Use a boolean for when we're inside strings, while handling escaped quotes (return false if we encounter escaping outside of string)
-// Refer to json.org for parsing logic
+/* What if we first parsed all characters into an array of JSON tokens without unnecessary whitespaces.
+This could be memory intensive if a JSON file is massive, but would allow for easier parsing.
+Could create one bigger JSON parser, or a bunch of tiny JSON parsers for each type of value and
+use them recursively (especially the object parser)!
+Diagram of thought: https://excalidraw.com/#json=OnoN3rfV0x-tLy29MHNAV,m_9HV8Xr5Zjw5xgksa0dPw */
 
-// Can largely ignore white space unless we're in a string// Use a stack for brackets
-// Use a boolean for when we're inside strings, while handling escaped quotes
-// Refer to json.org for parsing logic
+/* What if we made parse_json recursive where we can pass the chars iterator to the next
+function which continues the iteration when we encounter an object? Once it's done the object
+it returns either true or false. If false, we return false, if true, we keep going with the iterator
+until the there is no more to parse. Diagram of thought: https://excalidraw.com/#json=dM_uO3bgEwExHfYPO-YQW,mjpOY2pv7bJVtYvhQ1jt5w */
 
-// Can largely ignore white space unless we're in a string
 enum Token {
     String(String),
     Number(f64),
