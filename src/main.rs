@@ -1,9 +1,8 @@
+mod utils;
 use clap::Parser;
-use regex::Regex;
-use std::{
-    char,
-    fs::File,
-    io::{self, BufReader, Read},
+use std::{char, io};
+use utils::{
+    get_json, get_value_type, is_escaped_char_valid, is_string_valid, print_err, ValueType,
 };
 
 #[derive(Parser, Debug)]
@@ -25,28 +24,14 @@ it returns either true or false. If false, we return false, if true, we keep goi
 until the there is no more to parse. Diagram of thought: https://excalidraw.com/#json=dM_uO3bgEwExHfYPO-YQW,mjpOY2pv7bJVtYvhQ1jt5w */
 
 enum Token {
-    String(String),
-    Number(f64),
-    Bool(bool),
-    Null,
+    Value(ValueType),
+    Key(String),
     OpenCurly,
     CloseCurly,
     OpenSquare,
     CloseSquare,
     Colon,
     Comma,
-    Escape,
-}
-
-enum ValueType {
-    String,
-    Number,
-    Object,
-    Array,
-    True,
-    False,
-    Null,
-    Error,
 }
 
 fn main() -> io::Result<()> {
@@ -61,6 +46,38 @@ fn main() -> io::Result<()> {
         println!("{}, INVALID", 1)
     }
     Ok(())
+}
+
+fn parse_json_v2(json: &String) -> Vec<Token> {
+    let mut tokens: Vec<Token> = Vec::new();
+    let mut current_string = String::new();
+    let mut prev_char: char = '\0';
+    let mut is_in_string = false;
+
+    for char in json.chars() {
+        if is_in_string {
+            current_string.push(char);
+            if prev_char != '\\' && char == '"' {
+                is_in_string = false;
+            }
+        } else {
+            if char == '{' {
+                tokens.push(Token::OpenCurly);
+            } else if char == '}' {
+                tokens.push(Token::CloseCurly);
+            } else if char == ',' {
+                tokens.push(Token::Comma);
+            } else if char == ':' {
+                tokens.push(Token::Colon);
+            } else if char == '"' {
+                current_string.push(char);
+                is_in_string = true;
+            }
+        }
+        prev_char = char;
+    }
+
+    return tokens;
 }
 
 fn parse_json(json: &String) -> bool {
@@ -194,80 +211,6 @@ fn parse_json(json: &String) -> bool {
     }
 
     return true;
-}
-
-fn is_escaped_char_valid(char: char) -> bool {
-    if char != '"'
-        && char != '\\'
-        && char != '/'
-        && char != 'b'
-        && char != 'f'
-        && char != 'n'
-        && char != 'r'
-        && char != 't'
-    // implement \u + 4 hex digits
-    {
-        return false;
-    }
-    return true;
-}
-
-fn is_string_valid(value: &String) -> bool {
-    let value = value.trim();
-    // let number_regex = Regex::new(r"-?\d+(\.\d+)?([eE][-+]?\d+)?").unwrap();
-    let string_regex =
-        Regex::new(r#"^"\s*((?:\\["\\\/bfnrt]|\\u[a-fA-F0-9]{4}|[^"\\])*)\s*"$"#).unwrap();
-    return string_regex.is_match(&value);
-}
-
-fn print_err(msg: &str) {
-    eprintln!("{}", msg);
-}
-
-fn is_number(value: &str) -> bool {
-    let re = Regex::new(r"^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$").unwrap();
-    return re.is_match(value);
-}
-
-fn get_value_type(value: &str) -> ValueType {
-    if value.starts_with('"') {
-        return ValueType::String;
-    } else if is_number(&value) {
-        return ValueType::Number;
-    } else if value.starts_with('[') {
-        return ValueType::Array;
-    } else if value.starts_with('{') {
-        return ValueType::Object;
-    } else if value.eq("true") {
-        return ValueType::True;
-    } else if value.eq("false") {
-        return ValueType::False;
-    } else if value.eq("null") {
-        return ValueType::Null;
-    } else {
-        return ValueType::Error;
-    }
-}
-
-fn get_json(file_name: Option<String>) -> io::Result<String> {
-    // Providing both file_name and stdin will just process the file.
-    let mut json = String::new();
-    match file_name {
-        Some(file_name) => {
-            let mut reader = open_file(&file_name)?;
-            let _ = reader.read_to_string(&mut json);
-        }
-        None => {
-            /* If no input is provided, user is able to type in their own input then press Ctrl+D (sometimes twice). */
-            let _ = io::stdin().read_to_string(&mut json);
-        }
-    }
-    Ok(json)
-}
-
-fn open_file(file_name: &str) -> io::Result<BufReader<File>> {
-    let file = File::open(file_name)?;
-    Ok(BufReader::new(file))
 }
 
 #[cfg(test)]
