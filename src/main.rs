@@ -1,8 +1,9 @@
 mod utils;
 use clap::Parser;
-use std::{char, io};
+use std::{char, io, iter::Peekable, str::Chars};
 use utils::{
-    get_json, get_value_type, is_escaped_char_valid, is_string_valid, print_err, ValueType,
+    get_json, get_value_type, is_escaped_char_valid, is_number, is_string_valid, print_err,
+    ValueType,
 };
 
 #[derive(Parser, Debug)]
@@ -38,28 +39,125 @@ fn main() -> io::Result<()> {
     let args = Args::parse();
 
     let json = get_json(args.file_name)?;
-    let is_valid = parse_json(&json);
+    println!("{}", json);
+    let mut chars = json.trim().chars().peekable();
 
-    if is_valid {
-        println!("{}, VALID", 0);
-    } else {
-        println!("{}, INVALID", 1)
-    }
+    // let mut is_valid = false;
+    parse_json_v3(&mut chars);
+
+    // if is_valid {
+    //     println!("{}, VALID", 0);
+    // } else {
+    //     println!("{}, INVALID", 1)
+    // }
     Ok(())
 }
 
-fn parse_json_v2(json: &String) -> Vec<Token> {
+fn parse_json_v3<T: Iterator<Item = char>>(iter: &mut Peekable<T>) -> bool {
+    let mut brack_stack: Vec<char> = Vec::new();
+
+    while let Some(ch) = iter.next() {
+        match ch {
+            '{' => {
+                brack_stack.push(ch);
+            }
+            '}' => {
+                let bracket = brack_stack.pop();
+                if let Some(bracket) = bracket {
+                    if bracket != '{' {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+            '"' => {
+                if !validate_string(iter) {
+                    return false;
+                }
+                continue;
+            }
+            ':' => {
+                let (is_value_valid, breaking_char) = validate_value(iter);
+                if !is_value_valid {
+                    return false;
+                }
+                // TODO: Remember what was supposed to happen based on which last char you sent back
+                // Things like '}' to pop stack, ',' for some reason, '\n', ' '...
+
+                continue;
+            }
+            _ => {}
+        };
+        println!("First function: {}", ch);
+    }
+    return false;
+}
+
+fn validate_string<T: Iterator<Item = char>>(iter: &mut Peekable<T>) -> bool {
+    let mut prev_char = '"';
+    let mut current_string = String::new();
+
+    current_string.push('"');
+
+    while let Some(ch) = iter.next() {
+        current_string.push(ch);
+        prev_char = ch;
+        if ch == '"' && prev_char != '\\' {
+            break;
+        }
+    }
+
+    return is_string_valid(&current_string);
+}
+
+fn validate_value<T: Iterator<Item = char>>(iter: &mut Peekable<T>) -> (bool, char) {
+    let mut current_value = String::new();
+    let mut last_char = '\0';
+
+    // TODO: Handle Objects, Arrays, Strings, Numbers, false, true, null
+    while let Some(ch) = iter.next() {
+        if ch == ',' || ch == '\n' || ch == '}' {
+            last_char = ch;
+            break;
+        }
+        current_value.push(ch);
+    }
+
+    let val_type = get_value_type(&current_value);
+
+    return (is_value_valid(val_type, &current_value), last_char);
+}
+
+fn is_value_valid(val_type: ValueType, value: &String) -> bool {
+    return match val_type {
+        ValueType::String => is_string_valid(value),
+        ValueType::Error => false,
+        ValueType::Array => false,  // * Needs impl
+        ValueType::Object => false, // TODO: Call parse_json_helper here
+        _ => true,
+    };
+}
+
+fn parse_json_v2(json: &String) -> Result<Vec<Token>, String> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut current_string = String::new();
     let mut prev_char: char = '\0';
     let mut is_in_string = false;
+    let mut is_in_value = false;
 
     for char in json.chars() {
         if is_in_string {
             current_string.push(char);
             if prev_char != '\\' && char == '"' {
                 is_in_string = false;
+                if is_string_valid(&current_string) {
+                    tokens.push(Token::Value(ValueType::String));
+                } else {
+                    return Err(format!("Invalid string: {}", current_string));
+                }
             }
+        } else if is_in_value {
         } else {
             if char == '{' {
                 tokens.push(Token::OpenCurly);
@@ -69,6 +167,7 @@ fn parse_json_v2(json: &String) -> Vec<Token> {
                 tokens.push(Token::Comma);
             } else if char == ':' {
                 tokens.push(Token::Colon);
+                is_in_value = true;
             } else if char == '"' {
                 current_string.push(char);
                 is_in_string = true;
@@ -77,7 +176,7 @@ fn parse_json_v2(json: &String) -> Vec<Token> {
         prev_char = char;
     }
 
-    return tokens;
+    return Ok(tokens);
 }
 
 fn parse_json(json: &String) -> bool {
@@ -126,7 +225,7 @@ fn parse_json(json: &String) -> bool {
                     return false;
                 }
             }
-        } else if is_in_value && !is_in_string {
+        } else if is_in_value {
             let mut should_concat = true;
             if char == ',' {
                 is_in_value = false;

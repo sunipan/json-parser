@@ -4,5 +4,16 @@
   "key-o": {
     "inner key": "inner value"
   },
-  "key-l": ["list value"]
+  "key-l": ["list value"],
+  "key-b": true,
+  "key-b2": false,
+  "key-n2": null,
+  "key-l2": [
+    {
+      "inner key": "inner value"
+    },
+    {
+      "inner key": "inner value"
+    }
+  ]
 }
